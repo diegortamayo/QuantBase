@@ -1,5 +1,6 @@
 from config.endpoint_config import *
 from utils.url_utils import url_builder
+from utils.general import normalize_profile
 
 import requests
 import json
@@ -15,10 +16,6 @@ WKD = os.path.dirname(os.path.abspath(__file__))
 TWFRAW_PATH = os.path.join(WKD, "..", "data", "raw", "tickers_with_financials.json")
 PROFILE_RAW = os.path.join(WKD, "..", "data", "raw", "ticker_profiles.parquet")
 TWFCLEAN_PATH = os.path.join(WKD, "..", "data", "clean", "tickers_with_financials.json")
-
-
-def normalize_profile(p):
-    return {field: p.get(field, None) for field in PROFILE_FIELDS}
 
 
 def fetch_tickers_with_financials():
@@ -55,6 +52,26 @@ def get_industry_sectors():
     sectors = get_sectors()
     industries = get_industries()
     return sectors, industries
+
+
+def clean_classification_map():
+    file = os.path.join(WKD, "..", "data", "raw", "classification_map.json")
+    with open(file, "r") as f:
+        sector_industries = json.load(f)
+
+    industry_sectors = {industry: sector
+                        for sector, industries in sector_industries.items()
+                        for industry in industries}
+    bi_map = {
+        "sector_to_industry": sector_industries,
+        "industry_to_sectors": industry_sectors,
+    }
+
+    file_clean = os.path.join(WKD, "..", "data", "clean", "classification_map.json")
+    with open(file_clean, "w") as f:
+        json.dump(bi_map, f, indent=4)
+
+clean_classification_map()
 
 
 async def get_profile(session, ticker):
@@ -110,4 +127,9 @@ def save_raw_profiles():
         df.to_parquet(PROFILE_RAW, index=False)
 
 
-# save_raw_profiles()
+def clean_profiles():
+    raw_profiles = pd.read_parquet(PROFILE_RAW)
+    cleaned = raw_profiles.loc[raw_profiles["error"].isna() & (raw_profiles["isActivelyTrading"] == ACTIVE_TRADING_FLAG), CLEAN_COLUMNS]
+    profile_clean = os.path.join(WKD, "..", "data", "clean", "ticker_profiles.parquet")
+    cleaned.to_parquet(profile_clean, index=False)
+    print(f"Cleaned {len(cleaned)} profiles")

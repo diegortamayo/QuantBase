@@ -20,3 +20,6 @@ PROFILE_FIELDS = [
     "ceo","sector","country","fullTimeEmployees","phone","address","city","state","zip","image","ipoDate",
     "defaultImage","isEtf","isActivelyTrading","isAdr","isFund","error"
 ]
+
+ACTIVE_TRADING_FLAG = True
+CLEAN_COLUMNS = ["symbol", "cik", "isin", "exchange", "sector", "industry", "country", "ipoDate"]
