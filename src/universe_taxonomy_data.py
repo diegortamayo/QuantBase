@@ -13,20 +13,20 @@ import aiohttp
 
 
 WKD = os.path.dirname(os.path.abspath(__file__))
-TWFRAW_PATH = os.path.join(WKD, "..", "data", "raw", "tickers_with_financials.json")
+TWFRAW_PATH = os.path.join(WKD, "..", "data", "raw", "tickers.json")
 PROFILE_RAW = os.path.join(WKD, "..", "data", "raw", "ticker_profiles.parquet")
-TWFCLEAN_PATH = os.path.join(WKD, "..", "data", "clean", "tickers_with_financials.json")
+TWFCLEAN_PATH = os.path.join(WKD, "..", "data", "clean", "tickers.json")
 
 
-def fetch_tickers_with_financials():
-    url = url_builder(FIN_STATEMENT_SYMBOLS_ENDPOINT)
+def fetch_tickers():
+    url = url_builder(ALL_SYMBOLS_ENDPOINT)
     request = requests.get(url)
     req = request.json()
     with open(TWFRAW_PATH, "w") as f:
         json.dump(req, f, indent=4)
 
 
-def clean_tickers_with_financials():
+def clean_tickers():
     with open(TWFRAW_PATH, "r") as f:
         req = json.load(f)
         tickers = [d["symbol"] for d in req]
@@ -112,7 +112,7 @@ async def get_all_profiles(tickers):
             df.to_parquet(individual_paths, index=False)
             print(f"Finished batch {i} to {i + RATE_LIMIT}")
 
-            await asyncio.sleep(60)
+            await asyncio.sleep(LIMIT_SECONDS)
 
 
 def save_raw_profiles():
@@ -129,7 +129,21 @@ def save_raw_profiles():
 
 def clean_profiles():
     raw_profiles = pd.read_parquet(PROFILE_RAW)
-    cleaned = raw_profiles.loc[raw_profiles["error"].isna() & (raw_profiles["isActivelyTrading"] == ACTIVE_TRADING_FLAG), CLEAN_COLUMNS]
+    cleaned = (raw_profiles.loc[raw_profiles["error"].isna() &
+                               (raw_profiles["isActivelyTrading"] == ACTIVE_TRADING_FLAG) &
+                               (raw_profiles["isEtf"] == False) &
+                               (raw_profiles["isAdr"] == False) &
+                               (raw_profiles["exchange"].isin(TRADED_EXCHANGES)) &
+                               (~raw_profiles["industry"].isin(INDUSTRY_EXLCUSIONS)) &
+                               (raw_profiles["averageVolume"] > 10_000) &
+                                (~raw_profiles["companyName"].str.contains("|".join(EXCLUSION_TERMS), case=False, na=False)) &
+                                (~raw_profiles["symbol"].str.contains("-", na=False)) &
+                                (~raw_profiles["companyName"].str.contains("%", na=False)) &
+                                (~raw_profiles["companyName"].str.contains(r"\d.\d", na=False)) &
+                                 (raw_profiles["marketCap"] > 0),
+                                CLEAN_PROFILE_FILEDS])
+    cleaned["symbol_len"] = cleaned["symbol"].str.len()
+    cleaned = cleaned.sort_values("symbol_len").drop_duplicates(subset=["companyName"], keep="first").drop(columns=["symbol_len"])
     profile_clean = os.path.join(WKD, "..", "data", "clean", "ticker_profiles.parquet")
     cleaned.to_parquet(profile_clean, index=False)
     print(f"Cleaned {len(cleaned)} profiles")

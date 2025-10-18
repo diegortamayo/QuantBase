@@ -1,2 +1,2 @@
-data/raw/ticker_profiles_*.parquet
-data/raw/tickers_with_financials.json
+data/*
+config.keys.py
