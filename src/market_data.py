@@ -1,17 +1,12 @@
 from config.endpoint_config import *
+from config.data_paths import PROFILE_CLEAN, market_path_ind
 from utils.url_utils import url_builder
 from utils.general import normalize_ohlcv
-
-import os
 
 import pandas as pd
 import asyncio
 import aiohttp
 
-
-WKD = os.path.dirname(os.path.abspath(__file__))
-MARKET_DATA_DIR = os.path.join(WKD, "..", "data", "market")
-TICKERS = os.path.join(WKD, "..", "data", "clean", "ticker_profiles.parquet")
 
 
 async def fetch(session, symbol):
@@ -32,7 +27,7 @@ async def fetch(session, symbol):
     ret = normalize_ohlcv(ret)
 
     df = pd.DataFrame(ret)
-    df.to_parquet(os.path.join(MARKET_DATA_DIR, f"{symbol}.parquet"), index=False)
+    df.to_parquet(market_path_ind(symbol), index=False)
 
 
 async def fetch_all(tickers):
@@ -49,8 +44,6 @@ async def fetch_all(tickers):
 
 
 def market_data_engine():
-    tickers = pd.read_parquet(TICKERS)["symbol"].tolist()
+    tickers = pd.read_parquet(PROFILE_CLEAN)["symbol"].tolist()
 
     asyncio.run(fetch_all(tickers))
-
-market_data_engine()
