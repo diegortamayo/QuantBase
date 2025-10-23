@@ -135,5 +135,6 @@ def clean_profiles():
                                 CLEAN_PROFILE_FILEDS])
     cleaned["symbol_len"] = cleaned["symbol"].str.len()
     cleaned = cleaned.sort_values("symbol_len").drop_duplicates(subset=["companyName"], keep="first").drop(columns=["symbol_len"])
+    cleaned["ipoDate"] = pd.to_datetime(cleaned["ipoDate"], errors="coerce")
     cleaned.to_parquet(PROFILE_CLEAN, index=False)
     print(f"Cleaned {len(cleaned)} profiles")

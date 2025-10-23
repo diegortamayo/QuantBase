@@ -1,6 +1,5 @@
+from config.data_paths import PROFILE_CLEAN
+import datetime
 import pandas as pd
 
 
-
-def base_summary_map():
-    pass

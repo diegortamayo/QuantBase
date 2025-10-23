@@ -1,6 +1,5 @@
 import os
 from glob import glob
-from operator import index
 
 # --------------- File names -------------
 tickers_with_financials = "tickers.json"
