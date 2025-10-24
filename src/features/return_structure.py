@@ -2,7 +2,7 @@ from config.features_config import *
 import numpy as np
 
 
-def return_structure(df):
+def return_structure_features(df):
     def draw(x, per):
         return x / x.rolling(per, min_periods=1)
     def max_draw(x):

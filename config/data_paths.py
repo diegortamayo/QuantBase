@@ -1,6 +1,7 @@
 import os
 from glob import glob
 
+
 # --------------- File names -------------
 tickers_with_financials = "tickers.json"
 ticker_profiles = "ticker_profiles.parquet"
@@ -15,7 +16,6 @@ DATA_BASE = os.path.join(WKD, "..", "data")
 RAW_BASE = os.path.join(DATA_BASE, "raw")
 CLEAN_BASE = os.path.join(DATA_BASE, "clean")
 MARKET_BASE = os.path.join(DATA_BASE, "market")
-
 
 # --------------- --------------
 os.makedirs(RAW_BASE, exist_ok=True)
