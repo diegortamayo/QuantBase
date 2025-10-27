@@ -5,11 +5,16 @@ import numpy as np
 
 
 def volume_features(df: pd.DataFrame) -> pd.DataFrame:
+    new_columns = {}
+
     df["log_volume"] = np.log(df["volume"])
     for period in MULTI_HORIZONS:
-        df[f"avg_dol_volume_{period}d"] = (df["volume"] * df["close"]).rolling(period).mean()
-        df[f"volume_vol_{period}d"] = df["log_volume"].rolling(period, min_periods=1).std()
+        new_columns[f"avg_dol_volume_{period}d"] = (df["volume"] * df["close"]).rolling(period).mean()
+        new_columns[f"volume_vol_{period}d"] = df["log_volume"].rolling(period, min_periods=1).std()
         roll = df["volume"].rolling(period)
-        df[f"volume_zscore_{period}d"] = (df["volume"] - roll.mean()) / roll.std()
+        new_columns[f"volume_zscore_{period}d"] = (df["volume"] - roll.mean()) / roll.std()
 
-    return df
+    drop_cols = set(new_columns) & set(df.columns)
+    if drop_cols:
+        df = df.drop(columns=list(drop_cols))
+    return pd.concat([df, pd.DataFrame(new_columns, index=df.index)], axis=1)

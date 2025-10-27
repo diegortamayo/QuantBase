@@ -1,6 +1,7 @@
 from config.features_config import *
 
 import numpy as np
+import pandas as pd
 
 # This module is dependent on return structure for ret_1d
 
@@ -15,22 +16,29 @@ def rolling_sortino(mean_ret, downside_dev):
 
 
 def volatility_risk_features(df):
+    new_columns = {}
     tr = np.maximum(df["high"] - df["low"], np.maximum(abs(df["high"] - df["close"].shift(1)), abs(df["low"] - df["close"].shift(1))))
     neg = df["ret_1d"].clip(upper=0)
     for period in MULTI_HORIZONS:
         roll_1d = df["ret_1d"].rolling(period, min_periods=5)
         roll_1d_mean = roll_1d.mean()
         roll_1d_std = roll_1d.std()
-        df[f"realized_vol_{period}d"] = roll_1d_std
+        new_columns[f"realized_vol_{period}d"] = roll_1d_std
 
         if period in SHORT_HORIZONS or period in MID_HORIZONS:
-            df[f"atr_{period}d"] = tr.rolling(period, min_periods=1).mean() / df["close"]
+            new_columns[f"atr_{period}d"] = tr.rolling(period, min_periods=1).mean() / df["close"]
 
         if period in MID_HORIZONS or period in LONG_HORIZONS:
-            df[f"downside_dev_{period}d"] = neg.rolling(period, min_periods=5).std()
-            df[f"rolling_sharpe_{period}d"] = rolling_sharpe(roll_1d_mean, roll_1d_std)
-            df[f"rolling_sortino_{period}d"] = rolling_sortino(roll_1d_mean, df[f"downside_dev_{period}d"])
+            new_columns[f"downside_dev_{period}d"] = neg.rolling(period, min_periods=5).std()
+            new_columns[f"rolling_sharpe_{period}d"] = rolling_sharpe(roll_1d_mean, roll_1d_std)
+            new_columns[f"rolling_sortino_{period}d"] = rolling_sortino(roll_1d_mean, new_columns[f"downside_dev_{period}d"])
 
-    df["vol_ratio_5_21"] = df["realized_vol_5d"] / df["realized_vol_21d"]
-    df["vol_ratio_21_63"] = df["realized_vol_21d"] / df["realized_vol_63d"]
-    df["vol_ratio_63_126"] = df["realized_vol_63d"] / df["realized_vol_126d"]
+    new_columns["vol_ratio_5_21"] = new_columns["realized_vol_5d"] / new_columns["realized_vol_21d"]
+    new_columns["vol_ratio_21_63"] = new_columns["realized_vol_21d"] / new_columns["realized_vol_63d"]
+    new_columns["vol_ratio_63_126"] = new_columns["realized_vol_63d"] / new_columns["realized_vol_126d"]
+
+    drop_cols = set(new_columns) & set(df.columns)
+    if drop_cols:
+        df = df.drop(columns=list(drop_cols))
+
+    return pd.concat([df, pd.DataFrame(new_columns, index=df.index)], axis=1)

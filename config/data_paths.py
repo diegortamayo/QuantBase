@@ -51,4 +51,3 @@ PROFILE_RAW = build_raw(ticker_profiles)
 PROFILE_CLEAN = build_clean(ticker_profiles)
 CLASSIFICATION_MAP_RAW = build_raw(classification_map)
 CLASSIFICATION_MAP_CLEAN = build_clean(classification_map)
-
