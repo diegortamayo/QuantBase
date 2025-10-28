@@ -1,10 +1,26 @@
+"""
+Compute multi-horizon return structure features for price data.
+
+Includes cumulative returns, log returns, drawdowns, distance to highs/lows,
+and basic distribution metrics over defined rolling periods.
+"""
+
 from config.features_config import *
 
 import pandas as pd
 import numpy as np
 
 
-def return_structure_features(df):
+def return_structure_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate rolling return and risk metrics across multiple horizons.
+
+    Args:
+        df: DataFrame with at least a 'close' price column.
+
+    Returns:
+        DataFrame with appended multi-period return, drawdown, and statistical features.
+    """
     def max_draw(x):
         return np.min(x / np.maximum.accumulate(x) - 1)
 

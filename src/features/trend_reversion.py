@@ -1,9 +1,28 @@
+"""
+Compute trend and reversion-based technical features for price data.
+
+Includes exponential moving average distance, deviation percentiles,
+z-score mean reversion, regression slope t-stats, and log-return slopes
+across multiple horizons.
+
+Depends on return_structure code running first
+"""
+
 from config.features_config import *
 
 import pandas as pd
 import numpy as np
 
-def trend_reversion_features(df: pd.DataFrame):
+def trend_reversion_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate trend and reversion metrics across multi-horizon windows.
+
+    Args:
+        df: DataFrame with 'close' and 'ret_1d' columns.
+
+    Returns:
+        DataFrame with added trend strength, reversion, and momentum features.
+    """
     def deviation_percentile(close, per):
         roll = close.rolling(per, min_periods=5)
         roll_min = roll.min()

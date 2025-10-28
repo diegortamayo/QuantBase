@@ -1,3 +1,9 @@
+"""
+Defines directory structure and path-building utilities for QuantBase data storage.
+Handles creation of raw, clean, and market folders and provides helper functions
+to build consistent file paths.
+"""
+
 import os
 from glob import glob
 
@@ -37,7 +43,12 @@ def individual_profiles(ind: str) -> str:
     filename = f"{ticker_profiles}_{ind}.parquet"
     return build_raw(filename)
 
-def select_all(directory, filename, extension, und = "_") -> list[str]:
+def select_all(directory: str, filename: str = "", extension: str = ".parquet", und: str = "_") -> list[str]:
+    """
+    Return a sorted list of files in directory matching filename_*extension,
+    filename*extension, or filenameextension. If filename is empty, include all files.
+    Extension must include the dot (e.g., '.parquet').
+    """
     path = os.path.join(directory, f"{filename}{und}*{extension}")
     return sorted(glob(path))
 

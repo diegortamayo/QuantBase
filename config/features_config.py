@@ -1,3 +1,7 @@
+"""
+Configurations and constants for features calculations
+"""
+
 MULTI_HORIZONS = [5, 21, 63, 126, 252, 504]
 SHORT_HORIZONS = [5, 21]
 MID_HORIZONS = [63, 126]
