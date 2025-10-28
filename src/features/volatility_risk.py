@@ -1,3 +1,12 @@
+"""
+Compute volatility and risk-adjusted performance metrics.
+
+Includes realized volatility, ATR, downside deviation, rolling Sharpe and Sortino ratios,
+and volatility ratio features across multiple horizons.
+
+Depends on return_structure features for 'ret_1d'.
+"""
+
 from config.features_config import *
 
 import numpy as np
@@ -15,7 +24,17 @@ def rolling_sortino(mean_ret, downside_dev):
     return mean_ret / downside_dev
 
 
-def volatility_risk_features(df):
+def volatility_risk_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate volatility and risk-return ratio features.
+
+    Args:
+        df: DataFrame containing 'close', 'high', 'low', and 'ret_1d' columns.
+
+    Returns:
+        DataFrame with realized volatility, ATR, Sharpe, Sortino, and volatility ratio features.
+    """
+
     new_columns = {}
     tr = np.maximum(df["high"] - df["low"], np.maximum(abs(df["high"] - df["close"].shift(1)), abs(df["low"] - df["close"].shift(1))))
     neg = df["ret_1d"].clip(upper=0)

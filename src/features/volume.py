@@ -1,3 +1,10 @@
+"""
+Compute volume-based liquidity and volatility features.
+
+Includes average dollar volume, rolling log-volume volatility,
+and volume z-scores across multiple horizons.
+"""
+
 from config.features_config import MULTI_HORIZONS
 
 import pandas as pd
@@ -5,6 +12,15 @@ import numpy as np
 
 
 def volume_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate rolling volume and liquidity metrics.
+
+    Args:
+        df: DataFrame containing 'close' and 'volume' columns.
+
+    Returns:
+        DataFrame with average dollar volume, volume volatility, and z-score features.
+    """
     new_columns = {}
 
     df["log_volume"] = np.log(df["volume"])

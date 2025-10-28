@@ -1,3 +1,10 @@
+"""
+Compute all engineered features for every market file in parallel.
+
+Applies return structure, volume, trend-reversion, and volatility features
+to all parquet files in MARKET_BASE using batched multiprocessing.
+"""
+
 from config.data_paths import MARKET_BASE
 from config.features_config import BATCH_SIZE, N_WORKERS, N_BATCH_COOLDOWN, COOLDOWN_TIME
 from features import *
@@ -17,7 +24,17 @@ FEATURE_FUNCTIONS = [
 ]
 
 
-def process_file(file_path: str):
+def process_file(file_path: str) -> str:
+    """
+    Apply all feature functions to a single parquet file.
+
+    Args:
+        file_path: Path to input parquet file.
+
+    Returns:
+        Stem name of the processed file.
+    """
+
     df = pd.read_parquet(file_path)
     df = df.sort_values("date").reset_index(drop=True)
 
@@ -28,7 +45,14 @@ def process_file(file_path: str):
     return Path(file_path).stem
 
 
-def compute_features_all():
+def compute_features_all() -> None:
+    """
+    Run batched multiprocessing to compute features for all market files.
+
+    Uses N_WORKERS parallel processes, batch size BATCH_SIZE, and cooldown
+    after every N_BATCH_COOLDOWN batches to manage memory load.
+    """
+
     files = [f for f in Path(MARKET_BASE).glob("*.parquet")]
     with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
         for i in range(0, len(files), BATCH_SIZE):
