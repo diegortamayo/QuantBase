@@ -22,6 +22,29 @@ FIVEMIN_MARKET_ENDPOINT = "historical-chart/5min"
 DAILY_MARKET_ENDPOINT = "historical-price-eod/full"
 START_DATE = "2017-01-01"
 
+# Financial statements
+INCOME_STATEMENT_ENDPOINT = "income-statement"
+BALANCE_SHEET_ENDPOINT = "balance-sheet-statement"
+CASH_FLOW_STATEMENT_ENDPOINT = "cash-flow-statement"
+
+
+
+# FUNDAMENTAL ENDPOINT SETTINGS
+YEARS_LIMIT = 8
+QUARTER_LIMIT = YEARS_LIMIT*4
+
+
+STYPES = ["income", "cash", "balance"]
+STATEMENT_ENDPOINTS = {
+    STYPES[0]: INCOME_STATEMENT_ENDPOINT,
+    STYPES[1]: CASH_FLOW_STATEMENT_ENDPOINT,
+    STYPES[2]: BALANCE_SHEET_ENDPOINT
+}
+
+REQ_PER_TICKER_FUNDAMENTALS = 3
+HEADER_KEYS = ["date", "symbol", "reportedCurrency", "cik", "filingDate", "acceptedDate", "fiscalYear", "period"]
+
+
 
 # --------------- FIELDS ---------------------
 PROFILE_FIELDS = [

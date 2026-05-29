@@ -8,7 +8,7 @@ normalized Parquet files to MARKET_BASE.
 from config.endpoint_config import *
 from config.data_paths import PROFILE_CLEAN, market_path_ind
 from utils.url_utils import url_builder
-from utils.general import normalize_ohlcv
+from utils.normalize import normalize_ohlcv
 
 import pandas as pd
 import asyncio
@@ -16,7 +16,7 @@ import aiohttp
 
 
 
-async def fetch(session, symbol) -> None:
+async def fetch_one(session, symbol) -> None:
     """
     Fetch and normalize OHLCV data for a single ticker asynchronously.
 
@@ -63,7 +63,7 @@ async def fetch_all(tickers) -> None:
             batch = tickers[i:i + RATE_LIMIT]
             print(f"Fetching batch {i} to {i + RATE_LIMIT}")
 
-            tasks = [fetch(session, ticker) for ticker in batch]
+            tasks = [fetch_one(session, ticker) for ticker in batch]
             await asyncio.gather(*tasks, return_exceptions=True)
 
             print(f"Saved batch {i} to {i + RATE_LIMIT}")

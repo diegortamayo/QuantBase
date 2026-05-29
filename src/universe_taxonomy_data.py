@@ -22,7 +22,7 @@ Functions:
 from config.data_paths import *
 from config.endpoint_config import *
 from utils.url_utils import url_builder
-from utils.general import normalize_profile
+from utils.normalize import normalize_profile
 
 import requests
 import json

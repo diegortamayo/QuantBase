@@ -22,11 +22,13 @@ DATA_BASE = os.path.join(WKD, "..", "data")
 RAW_BASE = os.path.join(DATA_BASE, "raw")
 CLEAN_BASE = os.path.join(DATA_BASE, "clean")
 MARKET_BASE = os.path.join(DATA_BASE, "market")
+FUNDAMENTALS_BASE = os.path.join(DATA_BASE, "fundamentals")
 
 # --------------- --------------
 os.makedirs(RAW_BASE, exist_ok=True)
 os.makedirs(CLEAN_BASE, exist_ok=True)
 os.makedirs(MARKET_BASE, exist_ok=True)
+os.makedirs(FUNDAMENTALS_BASE, exist_ok=True)
 
 
 # -------------- Build functions ---------------------
@@ -36,6 +38,8 @@ def build_raw(filename: str) -> str:
     return os.path.join(RAW_BASE, filename)
 def build_market(filename: str) -> str:
     return os.path.join(MARKET_BASE, filename)
+def build_fundamental(filename: str) -> str:
+    return os.path.join(FUNDAMENTALS_BASE, filename)
 
 
 # --------------- Special functions --------------------
@@ -43,7 +47,7 @@ def individual_profiles(ind: str) -> str:
     filename = f"{ticker_profiles}_{ind}.parquet"
     return build_raw(filename)
 
-def select_all(directory: str, filename: str = "", extension: str = ".parquet", und: str = "_") -> list[str]:
+def select_all(directory: str, filename: str = "", extension: str = ".parquet", und: str = "") -> list[str]:
     """
     Return a sorted list of files in directory matching filename_*extension,
     filename*extension, or filenameextension. If filename is empty, include all files.
@@ -54,6 +58,8 @@ def select_all(directory: str, filename: str = "", extension: str = ".parquet", 
 
 def market_path_ind(symbol: str) -> str:
     return os.path.join(MARKET_BASE, f"{symbol}.parquet")
+def fundamentals_path_ind(symbol: str) -> str:
+    return os.path.join(FUNDAMENTALS_BASE, f"{symbol}.parquet")
 
 # -----------------Reusable paths -------------------------
 TICKERS_WITH_FINANCIALS_RAW = build_raw(tickers_with_financials)
