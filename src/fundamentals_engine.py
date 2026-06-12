@@ -4,7 +4,6 @@ from config.data_paths import fundamentals_path_ind, PROFILE_CLEAN
 
 from utils.url_utils import url_builder
 from utils.normalize import normalize_statements
-import math
 
 import asyncio
 import aiohttp
@@ -14,7 +13,8 @@ import pandas as pd
 async def fetch_one(session, symbol: str) -> None:
 
     async def _fetch(stype: str):
-        limit = QUARTER_LIMIT
+        # limit = QUARTER_LIMIT
+        limit=5  # --------------------------------------------------------------------------------------------
         statement = STATEMENT_ENDPOINTS[stype]
 
         url = url_builder(statement, {"symbol":symbol, "period":"quarter", "limit":limit})
@@ -39,7 +39,7 @@ async def fetch_one(session, symbol: str) -> None:
 
 
 async def fetch_all(tickers: list[str]) -> None:
-    rate = math.floor(RATE_LIMIT/REQ_PER_TICKER_FUNDAMENTALS)
+    rate = RATE_LIMIT // REQ_PER_TICKER_FUNDAMENTALS
     async with aiohttp.ClientSession() as session:
         for i in range(0, len(tickers), rate):
             batch = tickers[i: i+rate]
@@ -49,7 +49,7 @@ async def fetch_all(tickers: list[str]) -> None:
             await asyncio.gather(*tasks, return_exceptions=True)
 
             print(f"Saving batch {i} to {i+rate}")
-            await asyncio.sleep(LIMIT_SECONDS)
+            # await asyncio.sleep(LIMIT_SECONDS) --------------------------------------------------------
 
 
 def fundamentals_data_engine() -> None:
@@ -59,6 +59,10 @@ def fundamentals_data_engine() -> None:
     Loads ticker list from PROFILE_CLEAN and triggers asynchronous data fetch.
     """
 
-    tickers = pd.read_parquet(PROFILE_CLEAN)["symbol"].tolist()
-
+    # tickers = pd.read_parquet(PROFILE_CLEAN)["symbol"].tolist()--------------------------------------------
+    # AAPL, PM, PYPL
+    tickers = ["AAPL", "MRNA", "PYPL"]
     asyncio.run(fetch_all(tickers))
+
+
+fundamentals_data_engine()

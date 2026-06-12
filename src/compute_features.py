@@ -1,17 +1,24 @@
 """
-Compute all engineered features for every market file in parallel.
+Compute all engineered features for every market and fundamental file in parallel.
 
-Applies return structure, volume, trend-reversion, and volatility features
-to all parquet files in MARKET_BASE using batched multiprocessing.
+For market files: applies return structure, volume, trend-reversion, and volatility
+features to all parquet files in MARKET_BASE.
+
+For fundamental files: applies the financial-statement feature chain (profitability,
+leverage/liquidity, cash-flow/accruals, valuation inputs, growth, composite scores)
+followed by the market-dependent valuation/factor features, joining each filing to its
+matching market file in MARKET_BASE.
+
+Both pipelines use batched multiprocessing.
 """
 
-from config.data_paths import MARKET_BASE
-from config.features_config import BATCH_SIZE, N_WORKERS, N_BATCH_COOLDOWN, COOLDOWN_TIME
+from config.data_paths import MARKET_BASE, FUNDAMENTALS_BASE, market_path_ind
+from config.features_config import BATCH_SIZE, N_WORKERS, N_BATCH_COOLDOWN, COOLDOWN_TIME, VALID_FEATURE_TYPES
 from features import *
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-import time, gc
+import os, time, gc
 
 import pandas as pd
 
@@ -23,8 +30,20 @@ FEATURE_FUNCTIONS = [
     volatility_risk_features,
 ]
 
+# Financial-statement feature chain. Order matters: later functions read columns
+# produced by earlier ones (e.g. valuation inputs use 'nopat'/'roe' from
+# profitability, and the scores use roa/current_ratio/nwc from earlier modules).
+FUNDAMENTAL_FEATURE_FUNCTIONS = [
+    profitability_features,
+    leverage_liquidity_features,
+    cashflow_accruals_features,
+    valuation_input_features,
+    growth_features,
+    score_features,
+]
 
-def process_file(file_path: str) -> str:
+
+def process_market_file(file_path: str) -> str:
     """
     Apply all feature functions to a single parquet file.
 
@@ -45,22 +64,59 @@ def process_file(file_path: str) -> str:
     return Path(file_path).stem
 
 
-def compute_features_all() -> None:
+def process_fundamental_file(file_path: str) -> str:
     """
-    Run batched multiprocessing to compute features for all market files.
+    Apply the full fundamental feature pipeline to a single ticker's parquet file.
 
-    Uses N_WORKERS parallel processes, batch size BATCH_SIZE, and cooldown
-    after every N_BATCH_COOLDOWN batches to manage memory load.
+    Runs the financial-statement feature chain in dependency order, then joins the
+    matching market file to compute the market-dependent valuation/factor features.
+    Features are written back in place, matching the market pipeline convention.
+
+    Args:
+        file_path: Path to a per-ticker fundamental parquet file.
+
+    Returns:
+        Stem name (ticker symbol) of the processed file.
     """
 
-    files = [f for f in Path(MARKET_BASE).glob("*.parquet")]
+    df = pd.read_parquet(file_path)
+    df = df.sort_values("date").reset_index(drop=True)
+
+    for func in FUNDAMENTAL_FEATURE_FUNCTIONS:
+        df = func(df)
+
+    symbol = Path(file_path).stem
+    market_path = market_path_ind(symbol)
+    market_df = pd.read_parquet(market_path) if os.path.exists(market_path) else None
+    df = fundamental_market_features(df, market_df)
+
+    df.to_parquet(file_path)
+    return symbol
+
+
+def compute_features_all(feature_type: str):
+    if feature_type not in VALID_FEATURE_TYPES:
+        raise ValueError(f"Invalid argument, feature_type must exist in ['fundamental', 'market']")
+
+    if feature_type == VALID_FEATURE_TYPES[1]:
+        func = process_fundamental_file
+        # files = [f for f in Path(FUNDAMENTALS_BASE).glob("*.parquet")]
+        files = [
+            Path(FUNDAMENTALS_BASE) / "AAPL.parquet",
+            Path(FUNDAMENTALS_BASE) / "MRNA.parquet",
+            Path(FUNDAMENTALS_BASE) / "PYPL.parquet",
+        ]
+    else:
+        func = process_market_file
+        files = [f for f in Path(MARKET_BASE).glob("*.parquet")]
+
     with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
         for i in range(0, len(files), BATCH_SIZE):
             batch = files[i:i+BATCH_SIZE]
-            futures = [executor.submit(process_file, f) for f in batch]
+            futures = [executor.submit(func, f) for f in batch]
             for fut in as_completed(futures):
                 print(f"Finished features for: {fut.result()}")
-            print(f"Finished batch number {i}-{i+BATCH_SIZE}")
+            print(f"Finished batch number {i}-{i+len(batch)}")
 
             if (i // BATCH_SIZE+1) % N_BATCH_COOLDOWN == 0:
                 gc.collect()
@@ -68,6 +124,4 @@ def compute_features_all() -> None:
 
 
 if __name__ == "__main__":
-    from multiprocessing import freeze_support
-    freeze_support()
-    compute_features_all()
+    compute_features_all("fundamental")
