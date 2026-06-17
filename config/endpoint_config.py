@@ -1,3 +1,10 @@
+"""
+Centralize Financial Modeling Prep API endpoints, request limits, and schemas.
+
+Defines reusable endpoint names, rate-limit settings, response field lists, and
+filter flags used by the data ingestion and normalization pipelines.
+"""
+
 from config.keys import FMP_KEY
 
 
@@ -69,4 +76,3 @@ TRADED_EXCHANGES = [
 ]
 INDUSTRY_EXLCUSIONS = ["Shell Companies"]
 EXCLUSION_TERMS = ["preferred", "series", "warrant", "note", "bond", "debenture", "subordinated"]
-

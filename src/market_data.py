@@ -6,7 +6,7 @@ normalized Parquet files to MARKET_BASE.
 """
 
 from config.endpoint_config import *
-from config.data_paths import PROFILE_CLEAN, market_path_ind
+from config.data_paths import PROFILE_CLEAN, MARKET_ERRORS, market_path_ind
 from utils.url_utils import url_builder
 from utils.normalize import normalize_ohlcv
 
@@ -16,7 +16,7 @@ import aiohttp
 
 
 
-async def fetch_one(session, symbol) -> None:
+async def fetch_one(session, symbol) -> list[dict]:
     """
     Fetch and normalize OHLCV data for a single ticker asynchronously.
 
@@ -42,10 +42,13 @@ async def fetch_one(session, symbol) -> None:
         print(e)
         ret = [{"symbol": symbol, "error": str(e)}]
 
-    ret = normalize_ohlcv(ret)
+    ret, errors = normalize_ohlcv(ret)
+    if errors:
+        print(f"Skipping {len(errors)} market error record(s) for {symbol}: {errors}")
 
     df = pd.DataFrame(ret)
     df.to_parquet(market_path_ind(symbol), index=False)
+    return errors
 
 
 async def fetch_all(tickers) -> None:
@@ -58,16 +61,25 @@ async def fetch_all(tickers) -> None:
     Uses RATE_LIMIT and LIMIT_SECONDS for request throttling.
     """
 
+    all_errors = []
+
     async with aiohttp.ClientSession() as session:
         for i in range(0, len(tickers), RATE_LIMIT):
             batch = tickers[i:i + RATE_LIMIT]
             print(f"Fetching batch {i} to {i + RATE_LIMIT}")
 
             tasks = [fetch_one(session, ticker) for ticker in batch]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for symbol, result in zip(batch, results):
+                if isinstance(result, Exception):
+                    all_errors.append({"symbol": symbol, "error": str(result)})
+                else:
+                    all_errors.extend(result)
 
             print(f"Saved batch {i} to {i + RATE_LIMIT}")
             await asyncio.sleep(LIMIT_SECONDS)
+
+    pd.DataFrame(all_errors, columns=["symbol", "error"]).to_csv(MARKET_ERRORS, index=False)
 
 
 def market_data_engine() -> None:

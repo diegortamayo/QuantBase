@@ -18,9 +18,11 @@ import pandas as pd
 
 
 def rolling_sharpe(mean, std):
+    """Return the rolling Sharpe-like ratio from mean return and volatility."""
     return mean / std
 
 def rolling_sortino(mean_ret, downside_dev):
+    """Return the rolling Sortino-like ratio from mean return and downside deviation."""
     return mean_ret / downside_dev
 
 

@@ -1,5 +1,5 @@
 """
-Utility functions for schema normalization of profile and OHLCV data.
+Utility functions for schema normalization of profile, OHLCV, and statement data.
 
 Ensure that all expected fields are present in each record, filling missing values with None.
 """
@@ -21,7 +21,26 @@ def normalize_profile(p: dict) -> dict:
     return {field: p.get(field, None) for field in PROFILE_FIELDS}
 
 
-def normalize_ohlcv(ohlcv: list) -> list:
+def _is_error_record(record: dict) -> bool:
+    """Return True when an API payload record represents a fetch or data error."""
+    return bool(record.get("error"))
+
+
+def _split_error_records(records: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Separate error records from records that should continue through normalization."""
+    clean_records = []
+    error_records = []
+
+    for record in records:
+        if _is_error_record(record):
+            error_records.append(record)
+        else:
+            clean_records.append(record)
+
+    return clean_records, error_records
+
+
+def normalize_ohlcv(ohlcv: list[dict]) -> tuple[list[dict], list[dict]]:
     """
     Normalize a list of OHLCV dictionaries to the configured OHLCV_FIELDS schema.
 
@@ -29,24 +48,58 @@ def normalize_ohlcv(ohlcv: list) -> list:
         ohlcv: List of raw OHLCV records.
 
     Returns:
-        List of normalized OHLCV dictionaries with consistent field structure.
+        Tuple of normalized OHLCV dictionaries and raw error records.
     """
     def _normalize(ohlcv_dict: dict) -> dict:
+        """Normalize a single OHLCV record to the configured field schema."""
         return {field: ohlcv_dict.get(field, None) for field in OHLCV_FIELDS}
-    return [_normalize(ohlcv_dict) for ohlcv_dict in ohlcv]
+    clean_records, error_records = _split_error_records(ohlcv)
+    return [_normalize(ohlcv_dict) for ohlcv_dict in clean_records], error_records
 
 
-def normalize_statements(statements: dict[str, list[dict]]) -> pd.DataFrame:
-    dfs = {stype: pd.DataFrame(records) for stype, records in statements.items()}
+def normalize_statements(statements: dict[str, list[dict]]) -> tuple[pd.DataFrame, dict[str, list[dict]]]:
+    """
+    Merge normalized financial statement payloads into one tabular dataset.
+
+    Args:
+        statements: Mapping from statement type to raw statement records.
+
+    Returns:
+        Tuple containing:
+            - DataFrame containing clean statements outer-joined on shared header fields.
+            - Mapping from statement type to raw error records excluded from the merge.
+    """
+    clean_statements = {}
+    error_records = {}
+
+    for stype, records in statements.items():
+        clean_records, stype_errors = _split_error_records(records)
+        clean_statements[stype] = clean_records
+        if stype_errors:
+            error_records[stype] = stype_errors
+
+    dfs = {
+        stype: pd.DataFrame(records)
+        for stype, records in clean_statements.items()
+        if records
+    }
+
+    if not dfs:
+        return pd.DataFrame(columns=HEADER_KEYS), error_records
+
     stypes = list(dfs.keys())
 
     merged = dfs[stypes[0]]
 
     for stype in stypes[1:]:
         df = dfs[stype]
-        existing_header = [k for k in HEADER_KEYS if k in df.columns]
+        existing_header = [k for k in HEADER_KEYS if k in merged.columns and k in df.columns]
         non_header = [c for c in df.columns if c not in HEADER_KEYS]
+
+        if not existing_header:
+            merged = pd.concat([merged, df[non_header]], axis=1)
+            continue
 
         merged = merged.merge(df[existing_header + non_header], on=existing_header, how="outer")
         
-    return merged
+    return merged, error_records

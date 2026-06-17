@@ -22,6 +22,7 @@ def return_structure_features(df: pd.DataFrame) -> pd.DataFrame:
         DataFrame with appended multi-period return, drawdown, and statistical features.
     """
     def max_draw(x):
+        """Return the maximum drawdown within a rolling price window."""
         return np.min(x / np.maximum.accumulate(x) - 1)
 
     new_columns = {}

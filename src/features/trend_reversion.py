@@ -24,6 +24,7 @@ def trend_reversion_features(df: pd.DataFrame) -> pd.DataFrame:
         DataFrame with added trend strength, reversion, and momentum features.
     """
     def deviation_percentile(close, per):
+        """Return each price's percentile position within its rolling high-low range."""
         roll = close.rolling(per, min_periods=5)
         roll_min = roll.min()
         roll_max = roll.max()
@@ -50,6 +51,7 @@ def trend_reversion_features(df: pd.DataFrame) -> pd.DataFrame:
         denom = sum((x - x_mean) ** 2)
 
         def slope_tstat(y):
+            """Return the t-statistic of the rolling log-price regression slope."""
             if len(y) < period:
                 return np.nan
             y_mean = y.mean()

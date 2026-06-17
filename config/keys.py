@@ -1,1 +1,3 @@
+"""Store API credentials used by configuration modules."""
+
 FMP_KEY = "X8sUxzpMvxhWfQ8gU4vP61X5NIP6Joem"

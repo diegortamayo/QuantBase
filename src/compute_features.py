@@ -95,6 +95,17 @@ def process_fundamental_file(file_path: str) -> str:
 
 
 def compute_features_all(feature_type: str):
+    """
+    Compute configured feature sets for all files of the requested feature type.
+
+    Args:
+        feature_type: Feature pipeline selector. Must match one of
+            VALID_FEATURE_TYPES, where the fundamental selector runs the
+            fundamental pipeline and the market selector runs the market pipeline.
+
+    Raises:
+        ValueError: If feature_type is not configured in VALID_FEATURE_TYPES.
+    """
     if feature_type not in VALID_FEATURE_TYPES:
         raise ValueError(f"Invalid argument, feature_type must exist in ['fundamental', 'market']")
 
