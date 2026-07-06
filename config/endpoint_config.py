@@ -51,6 +51,15 @@ STATEMENT_ENDPOINTS = {
 REQ_PER_TICKER_FUNDAMENTALS = 3
 HEADER_KEYS = ["date", "symbol", "reportedCurrency", "cik", "filingDate", "acceptedDate", "fiscalYear", "period"]
 
+# Suffix appended to line items that appear on more than one statement, so each
+# statement keeps its own value through the merge (the cash-flow copies are period
+# deltas while balance-sheet copies are levels, so they genuinely differ).
+STATEMENT_SUFFIXES = {
+    STYPES[0]: "_is",
+    STYPES[1]: "_cf",
+    STYPES[2]: "_bs",
+}
+
 
 
 # --------------- FIELDS ---------------------

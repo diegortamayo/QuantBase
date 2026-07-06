@@ -8,7 +8,7 @@ revenue. The accrual block builds net operating assets (NOA) and the balance-she
 current quarter and the same quarter one year ago, plus a revenue-quality ratio.
 
 Reads (semantic line items): operatingCashFlow, netIncome, ebitda, freeCashFlow,
-    revenue, capitalExpenditure, depreciationAndAmortization, changeInWorkingCapital,
+    revenue, capitalExpenditure, depreciationAndAmortization_cf, changeInWorkingCapital,
     totalAssets, cashAndShortTermInvestments, totalInvestments, totalLiabilities,
     totalDebt, netCashProvidedByInvestingActivities, accountsReceivables_bs.
 
@@ -38,7 +38,9 @@ def cashflow_accruals_features(df: pd.DataFrame) -> pd.DataFrame:
     fcf = canonical(df, "freeCashFlow")
     revenue = canonical(df, "revenue")
     capex = canonical(df, "capitalExpenditure")
-    da = canonical(df, "depreciationAndAmortization")
+    # Cash-flow-statement D&A: the reported non-cash add-back, which is what the
+    # owner-earnings and capex-vs-D&A comparisons are defined against.
+    da = canonical(df, "depreciationAndAmortization_cf")
     change_wc = canonical(df, "changeInWorkingCapital")
     total_assets = canonical(df, "totalAssets")
     cash_sti = canonical(df, "cashAndShortTermInvestments")
@@ -46,7 +48,8 @@ def cashflow_accruals_features(df: pd.DataFrame) -> pd.DataFrame:
     total_liabilities = canonical(df, "totalLiabilities")
     total_debt = canonical(df, "totalDebt")
     cf_investing = canonical(df, "netCashProvidedByInvestingActivities")
-    ar_bs = canonical(df, "accountsReceivables_bs")  # _bs ? ----------------------------------------
+    # Balance-sheet receivables (level); the cash-flow copy is a period change.
+    ar_bs = canonical(df, "accountsReceivables_bs")
 
     new = {}
 

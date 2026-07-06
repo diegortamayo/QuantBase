@@ -13,7 +13,7 @@ current_ratio, gross_margin, asset_turnover, cfo_to_net_income, nwc.
 Reads (semantic line items): operatingCashFlow, weightedAverageShsOutDil,
     totalCurrentAssets, totalCurrentLiabilities, totalAssets, retainedEarnings, ebit,
     totalStockholdersEquity, totalLiabilities, netReceivables, revenue, grossProfit,
-    propertyPlantEquipmentNet, depreciationAndAmortization,
+    propertyPlantEquipmentNet, depreciationAndAmortization_cf,
     sellingGeneralAndAdministrativeExpenses, totalDebt, netIncome,
     propertyPlantEquipmentNet.
 
@@ -54,7 +54,9 @@ def score_features(df: pd.DataFrame) -> pd.DataFrame:
     revenue = canonical(df, "revenue")
     gross_profit = canonical(df, "grossProfit")
     ppe = canonical(df, "propertyPlantEquipmentNet")
-    da = canonical(df, "depreciationAndAmortization")
+    # Beneish DEPI compares depreciation rates, sourced from the cash-flow
+    # statement's reported D&A add-back.
+    da = canonical(df, "depreciationAndAmortization_cf")
     sga = canonical(df, "sellingGeneralAndAdministrativeExpenses")
     total_debt = canonical(df, "totalDebt")
     net_income = canonical(df, "netIncome")

@@ -7,7 +7,7 @@ working capital and its change, reinvestment rate). The DDM/GGM block produces
 dividends per share, the payout and retention ratios and the sustainable growth
 rate. Depends on `nopat` and `roe` from profitability_features.
 
-Reads (semantic line items): depreciationAndAmortization, revenue,
+Reads (semantic line items): depreciationAndAmortization_cf, revenue,
     capitalExpenditure, totalCurrentAssets, cashAndShortTermInvestments,
     totalCurrentLiabilities, shortTermDebt, commonDividendsPaid,
     weightedAverageShsOutDil, netIncome; and derived columns nopat, roe.
@@ -32,7 +32,9 @@ def valuation_input_features(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame with valuation-input features appended.
     """
-    da = canonical(df, "depreciationAndAmortization")
+    # Cash-flow-statement D&A: DCF reinvestment nets capex against the reported
+    # non-cash add-back.
+    da = canonical(df, "depreciationAndAmortization_cf")
     revenue = canonical(df, "revenue")
     capex = canonical(df, "capitalExpenditure")
     tca = canonical(df, "totalCurrentAssets")

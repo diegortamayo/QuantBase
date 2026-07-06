@@ -5,7 +5,7 @@ Ensure that all expected fields are present in each record, filling missing valu
 """
 import pandas as pd
 
-from config.endpoint_config import PROFILE_FIELDS, OHLCV_FIELDS, HEADER_KEYS
+from config.endpoint_config import PROFILE_FIELDS, OHLCV_FIELDS, HEADER_KEYS, STATEMENT_SUFFIXES
 
 
 def normalize_profile(p: dict) -> dict:
@@ -57,9 +57,41 @@ def normalize_ohlcv(ohlcv: list[dict]) -> tuple[list[dict], list[dict]]:
     return [_normalize(ohlcv_dict) for ohlcv_dict in clean_records], error_records
 
 
+def _suffix_overlapping_columns(dfs: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    """
+    Rename non-header line items that appear on more than one statement with the
+    owning statement's suffix from STATEMENT_SUFFIXES (income -> _is, cash -> _cf,
+    balance -> _bs), so the merge keeps every statement's own value instead of
+    colliding into ambiguous pandas _x/_y suffixes.
+
+    Args:
+        dfs: Mapping from statement type to its raw statement DataFrame.
+
+    Returns:
+        Mapping with the overlapping columns renamed per statement.
+    """
+    counts = {}
+    for df in dfs.values():
+        for column in df.columns:
+            if column not in HEADER_KEYS:
+                counts[column] = counts.get(column, 0) + 1
+    overlapping = {column for column, n in counts.items() if n > 1}
+
+    return {
+        stype: df.rename(columns={
+            column: column + STATEMENT_SUFFIXES.get(stype, f"_{stype}")
+            for column in df.columns if column in overlapping
+        })
+        for stype, df in dfs.items()
+    }
+
+
 def normalize_statements(statements: dict[str, list[dict]]) -> tuple[pd.DataFrame, dict[str, list[dict]]]:
     """
     Merge normalized financial statement payloads into one tabular dataset.
+
+    Line items shared by more than one statement are suffixed with the owning
+    statement's tag (_is/_cf/_bs) before the merge; see _suffix_overlapping_columns.
 
     Args:
         statements: Mapping from statement type to raw statement records.
@@ -86,6 +118,8 @@ def normalize_statements(statements: dict[str, list[dict]]) -> tuple[pd.DataFram
 
     if not dfs:
         return pd.DataFrame(columns=HEADER_KEYS), error_records
+
+    dfs = _suffix_overlapping_columns(dfs)
 
     stypes = list(dfs.keys())
 

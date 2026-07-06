@@ -6,12 +6,10 @@ Centralizes the three concerns every fundamental feature function needs:
   * column resolution - the unified per-ticker file is the outer merge of the
     income, cash-flow and balance-sheet statements (see utils.normalize.
     normalize_statements). Line items that appear on more than one statement are
-    suffixed by the merge: '_x' is the left/earlier statement, '_y' the right one.
-    Concretely:
-        netIncome_x / depreciationAndAmortization_x -> income statement
-        netIncome_y / depreciationAndAmortization_y -> cash-flow statement
-        accountsReceivables_x / inventory_x         -> cash-flow statement
-        accountsReceivables_y / inventory_y         -> balance sheet
+    suffixed with the owning statement's tag: '_is' income statement, '_cf'
+    cash-flow statement, '_bs' balance sheet. The statement matters: the
+    cash-flow copies of accountsReceivables/inventory are period changes while
+    the balance-sheet copies are levels, and the two D&A figures can differ.
     `canonical` hides this so feature code can ask for a semantic name and also
     keep working if a ticker is missing a statement (no collision -> plain name).
 
@@ -27,15 +25,21 @@ import numpy as np
 import pandas as pd
 
 
+# If a new unlisted column appears, it will leave dependent features with NaN until someone notices !!!!!!!!!!!!!!!!!!
 # Semantic name -> ordered list of candidate columns in the merged file.
 # The first column that exists wins.
 SUFFIX_CANDIDATES = {
-    "netIncome": ("netIncome_x", "netIncome"),
-    "depreciationAndAmortization": ("depreciationAndAmortization_x", "depreciationAndAmortization"),
-    "accountsReceivables_bs": ("accountsReceivables_y", "accountsReceivables"),
-    "inventory_bs": ("inventory_y", "inventory"),
-    "accountsReceivables_cf": ("accountsReceivables_x", "accountsReceivables"),
-    "inventory_cf": ("inventory_x", "inventory"),
+    # Plain 'netIncome' means the income-statement bottom line, the conventional
+    # source for every ratio/score that reads it.
+    "netIncome": ("netIncome_is", "netIncome"),
+    "netIncome_is": ("netIncome_is", "netIncome"),
+    "netIncome_cf": ("netIncome_cf", "netIncome"),
+    "depreciationAndAmortization_is": ("depreciationAndAmortization_is", "depreciationAndAmortization"),
+    "depreciationAndAmortization_cf": ("depreciationAndAmortization_cf", "depreciationAndAmortization"),
+    "accountsReceivables_bs": ("accountsReceivables_bs", "accountsReceivables"),
+    "inventory_bs": ("inventory_bs", "inventory"),
+    "accountsReceivables_cf": ("accountsReceivables_cf", "accountsReceivables"),
+    "inventory_cf": ("inventory_cf", "inventory"),
 }
 
 
