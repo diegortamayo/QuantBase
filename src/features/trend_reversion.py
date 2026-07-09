@@ -13,6 +13,34 @@ from config.features_config import *
 import pandas as pd
 import numpy as np
 
+
+def _deviation_percentile(close, p):
+    """Return each price's percentile position within its rolling high-low range."""
+    roll = close.rolling(p, min_periods=5)
+    roll_min = roll.min()
+    roll_max = roll.max()
+    # NaN instead of +/-inf when the window is perfectly flat (max == min).
+    price_range = roll_max - roll_min
+    return (close - roll_min) / price_range.where(price_range > 0)
+
+
+def _rolling_ols(log_close: pd.Series, p: int) -> tuple[pd.Series, pd.Series]:
+    """Vectorized rolling OLS of log-price on time: (slope t-stat, slope)."""
+    y = log_close.to_numpy(dtype="float64")
+    yc = y - np.nanmean(y)  # conditioning only; beta is shift invariant
+    x_mean = (p - 1) / 2.0
+    denom = p * (p * p - 1) / 12.0
+    w = np.arange(p) - x_mean
+    beta = np.convolve(yc, w[::-1], mode="valid") / denom
+    syy = (log_close.rolling(p).var(ddof=1) * (p-1)).to_numpy()[p-1:]
+    rss = np.maximum(syy - beta * beta * denom, 0.0)
+    se_beta = np.sqrt(rss / (p-2) / denom)
+    tstat = np.divide(beta, se_beta, out=np.full_like(beta, np.nan), where=se_beta>0)
+    pad = np.full(p-1, np.nan)
+    return (pd.Series(np.concatenate([pad, tstat]), index=log_close.index),
+            pd.Series(np.concatenate([pad, beta]), index=log_close.index))
+
+
 def trend_reversion_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Generate trend and reversion metrics across multi-horizon windows.
@@ -23,12 +51,6 @@ def trend_reversion_features(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame with added trend strength, reversion, and momentum features.
     """
-    def deviation_percentile(close, per):
-        """Return each price's percentile position within its rolling high-low range."""
-        roll = close.rolling(per, min_periods=5)
-        roll_min = roll.min()
-        roll_max = roll.max()
-        return (close - roll_min) / (roll_max - roll_min)
 
     new_columns = {}
     log_close = np.log(df["close"])
@@ -39,36 +61,13 @@ def trend_reversion_features(df: pd.DataFrame) -> pd.DataFrame:
     for period in MULTI_HORIZONS:
         ema = df["close"].ewm(span=period, adjust=False, min_periods=5).mean()
         new_columns[f"ema_distance_{period}d"] = df["close"]/ema - 1
-        new_columns[f"deviation_percentile_{period}d"] = deviation_percentile(df["close"], period)
+        new_columns[f"deviation_percentile_{period}d"] = _deviation_percentile(df["close"], period)
 
-        if period in SHORT_HORIZONS or period in MID_HORIZONS:
-            mu = log_close.rolling(period, min_periods=5).mean()
-            sigma = log_close.rolling(period, min_periods=5).std()
-            new_columns[f"reversion_zscore_{period}d"] = (log_close - mu) /sigma
+        mu = log_close.rolling(period, min_periods=5).mean()
+        sigma = log_close.rolling(period, min_periods=5).std()
+        new_columns[f"reversion_zscore_{period}d"] = (log_close - mu) /sigma
 
-        x = np.arange(period)
-        x_mean = x.mean()
-        denom = sum((x - x_mean) ** 2)
-
-        def slope_tstat(y):
-            """Return the t-statistic of the rolling log-price regression slope."""
-            if len(y) < period:
-                return np.nan
-            y_mean = y.mean()
-            cov_xy = np.sum((x - x_mean) * (y - y_mean))
-            beta = cov_xy / denom
-            y_hat = y_mean + beta * (x - x_mean)
-            residual = y - y_hat
-            std_error = np.sqrt(np.sum(residual ** 2) / (period - 2))
-            std_error_beta = std_error / np.sqrt(denom)
-            return beta / std_error_beta if std_error_beta != 0 else np.nan
-
-        new_columns[f"zscore_regression_{period}d"] = log_close.rolling(period).apply(slope_tstat, raw=False)
-
-        if period != SHORT_HORIZONS[0]:
-            new_columns[f"log_close_slope{period}d"] = log_close.rolling(period).apply(
-                lambda y: np.cov(x, y)[0, 1] / denom if len(y) == period else np.nan, raw=False
-            )
+        new_columns[f"zscore_regression_{period}d"], new_columns[f"log_close_slope{period}d"] = _rolling_ols(log_close, period)
 
     drop_cols = set(new_columns) & set(df.columns)
     if drop_cols:

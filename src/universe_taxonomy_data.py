@@ -15,7 +15,9 @@ Functions:
     get_profile(session, ticker): Async fetch and normalize profile for one ticker.
     get_all_profiles(tickers): Async batch fetch of all ticker profiles with rate limits.
     save_raw_profiles(): Run full profile download, merge batches into single Parquet.
-    clean_profiles(): Filter and sanitize company profiles, keeping only valid equities.
+    flag_profile_exclusions(profiles): Add per-rule exclusion flags and exclude_reason.
+    filter_common_stock_universe(raw_profiles): Reduce profiles to U.S. common stocks.
+    clean_profiles(): Load raw profiles, filter to common stocks, save clean Parquet.
 """
 
 
@@ -184,29 +186,98 @@ def save_raw_profiles() -> None:
         df.to_parquet(PROFILE_RAW, index=False)
 
 
-def clean_profiles() -> None:
+def flag_profile_exclusions(profiles: pd.DataFrame) -> pd.DataFrame:
     """
-    Clean and filter raw company profiles.
+    Add one boolean diagnostic column per exclusion rule, plus a combined
+    exclude_reason column, without dropping any rows.
 
-    Loads PROFILE_RAW, filters invalid equities, converts and sanitizes fields, and saves the cleaned dataset in PROFILE_CLEAN.
-    :return:
+    Args:
+        profiles: Raw profile DataFrame with the PROFILE_FIELDS schema.
+
+    Returns:
+        Copy of the input with the EXCLUSION_FLAGS columns and exclude_reason added.
+    """
+    flagged = profiles.copy()
+    name = flagged["companyName"].fillna("")
+    symbol = flagged["symbol"].fillna("")
+    industry = flagged["industry"].fillna("")
+
+    flagged["exclude_profile_error"] = flagged["error"].notna()
+    # Missing exchange is excluded (isin -> False); missing ETF/ADR flags are kept:
+    # eq(True) is False for None and the fillna covers nullable-boolean NA.
+    flagged["exclude_bad_exchange"] = ~flagged["exchange"].isin(TRADED_EXCHANGES)
+    flagged["exclude_etf"] = flagged["isEtf"].eq(True).fillna(False).astype(bool)
+    flagged["exclude_adr"] = flagged["isAdr"].eq(True).fillna(False).astype(bool)
+    flagged["exclude_shell"] = (industry.isin(INDUSTRY_EXCLUSIONS) |
+                                name.str.contains(SHELL_NAME_REGEX, case=False))
+
+    # Trust names are excluded unless FMP's industry marks the row as a REIT;
+    # see TRUST_NAME_REGEX in endpoint_config for the tradeoff.
+    trust_non_reit = (name.str.contains(TRUST_NAME_REGEX, case=False) &
+                      ~industry.str.contains(REIT_INDUSTRY_REGEX, case=False))
+    flagged["exclude_bad_name"] = name.str.contains(NAME_EXCLUSION_REGEX, case=False) | trust_non_reit
+    flagged["exclude_bad_symbol"] = symbol.str.contains(SYMBOL_EXCLUSION_REGEX)
+
+    flagged["exclude_reason"] = flagged[EXCLUSION_FLAGS].apply(
+        lambda row: ",".join(flag.removeprefix("exclude_") for flag in EXCLUSION_FLAGS if row[flag]),
+        axis=1)
+    return flagged
+
+
+def filter_common_stock_universe(raw_profiles: pd.DataFrame,
+                                 return_diagnostics: bool = False
+                                 ) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Reduce raw FMP profiles to U.S.-listed common stocks.
+
+    Drops profile errors, non-NYSE/NASDAQ listings, ETFs, ADRs, shell/SPAC
+    vehicles, and non-common-stock instruments (preferreds, warrants, units,
+    rights, debt, ETNs, funds) by company name and symbol convention, then
+    dedupes multi-class listings and parses ipoDate.
+
+    Args:
+        raw_profiles: Raw profile DataFrame with the PROFILE_FIELDS schema.
+        return_diagnostics: When True, also return the excluded rows with their
+            per-rule exclusion flags and exclude_reason for inspection.
+
+    Returns:
+        Cleaned DataFrame, or (cleaned, excluded) when return_diagnostics is True.
+    """
+    flagged = flag_profile_exclusions(raw_profiles)
+    excluded_mask = flagged[EXCLUSION_FLAGS].any(axis=1)
+
+    cleaned = flagged.loc[~excluded_mask, CLEAN_PROFILE_FILEDS].copy()
+    # Keep one listing per company, preferring the shortest symbol (primary class).
+    cleaned["symbol_len"] = cleaned["symbol"].str.len()
+    cleaned = (cleaned.sort_values("symbol_len")
+               .drop_duplicates(subset=["companyName"], keep="first")
+               .drop(columns=["symbol_len"]))
+    cleaned["ipoDate"] = pd.to_datetime(cleaned["ipoDate"], errors="coerce")
+
+    if return_diagnostics:
+        excluded = flagged.loc[excluded_mask, CLEAN_PROFILE_FILEDS + EXCLUSION_FLAGS + ["exclude_reason"]]
+        return cleaned, excluded
+    return cleaned
+
+
+def clean_profiles(return_diagnostics: bool = False
+                   ) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Clean and filter raw company profiles into a U.S. common-stock universe.
+
+    Loads PROFILE_RAW, runs filter_common_stock_universe, and saves the cleaned
+    dataset to PROFILE_CLEAN.
+
+    Args:
+        return_diagnostics: When True, also return the excluded rows with their
+            per-rule exclusion flags and exclude_reason.
+
+    Returns:
+        Cleaned DataFrame, or (cleaned, excluded) when return_diagnostics is True.
     """
     raw_profiles = pd.read_parquet(PROFILE_RAW)
-    cleaned = (raw_profiles.loc[raw_profiles["error"].isna() &
-                               (raw_profiles["isActivelyTrading"] == ACTIVE_TRADING_FLAG) &
-                               (raw_profiles["isEtf"] == False) &
-                               (raw_profiles["isAdr"] == False) &
-                               (raw_profiles["exchange"].isin(TRADED_EXCHANGES)) &
-                               (~raw_profiles["industry"].isin(INDUSTRY_EXLCUSIONS)) &
-                               (raw_profiles["averageVolume"] > 10_000) &
-                                (~raw_profiles["companyName"].str.contains("|".join(EXCLUSION_TERMS), case=False, na=False)) &
-                                (~raw_profiles["symbol"].str.contains("-", na=False)) &
-                                (~raw_profiles["companyName"].str.contains("%", na=False)) &
-                                (~raw_profiles["companyName"].str.contains(r"\d.\d", na=False)) &
-                                 (raw_profiles["marketCap"] > 0),
-                                CLEAN_PROFILE_FILEDS])
-    cleaned["symbol_len"] = cleaned["symbol"].str.len()
-    cleaned = cleaned.sort_values("symbol_len").drop_duplicates(subset=["companyName"], keep="first").drop(columns=["symbol_len"])
-    cleaned["ipoDate"] = pd.to_datetime(cleaned["ipoDate"], errors="coerce")
+    result = filter_common_stock_universe(raw_profiles, return_diagnostics=return_diagnostics)
+    cleaned = result[0] if return_diagnostics else result
     cleaned.to_parquet(PROFILE_CLEAN, index=False)
-    print(f"Cleaned {len(cleaned)} profiles")
+    print(f"Cleaned {len(cleaned)} profiles ({len(raw_profiles) - len(cleaned)} excluded)")
+    return result

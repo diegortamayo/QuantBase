@@ -75,7 +75,7 @@ CLEAN_PROFILE_FILEDS = ["symbol", "cik", "isin", "exchange", "sector", "industry
 OHLCV_FIELDS = ["symbol", "date", "open", "high", "low", "close", "volume", "changePercent", "vwap", "error"]
 
 
-# --------------- MISCELANEOUS---------------------
+# --------------- UNIVERSE FILTERS ---------------------
 ACTIVE_TRADING_FLAG = True
 ADR_FLAG = False
 ETF_FLAG = False
@@ -83,5 +83,74 @@ TRADED_EXCHANGES = [
     "NYSE",
     "NASDAQ",
 ]
-INDUSTRY_EXLCUSIONS = ["Shell Companies"]
-EXCLUSION_TERMS = ["preferred", "series", "warrant", "note", "bond", "debenture", "subordinated"]
+
+# FMP industries that mark a profile as a shell/SPAC vehicle.
+INDUSTRY_EXCLUSIONS = ["Shell Companies"]
+
+# Company-name fragments that identify SPAC / blank-check shells. Kept separate
+# from NAME_EXCLUSION_TERMS so shells get their own diagnostic flag. The optional
+# roman/arabic numeral covers serial SPACs like "Pioneer Acquisition I Corp".
+SHELL_NAME_TERMS = [
+    r"\bacquisition\s+(?:[ivx0-9]+\s+)?corp(?:oration)?\b",
+    r"\bspac\b",
+    r"\bspecial purpose acquisition\b",
+    r"\bblank check\b",
+    r"\bshell compan(?:y|ies)\b",
+]
+SHELL_NAME_REGEX = "|".join(SHELL_NAME_TERMS)
+
+# Company-name fragments that identify non-common-stock instruments
+# (preferreds, warrants, units, rights, debt, ETNs, funds). All terms are
+# word-bounded so e.g. "United"/"Bright"/"Fundamental" are not caught.
+NAME_EXCLUSION_TERMS = [
+    r"\bpreferred\b",
+    r"\bpreference\b",
+    r"\bdepositary shares?\b",
+    r"\bwarrants?\b",
+    r"\brights?\b",
+    r"\bunits?\b",
+    r"\bnotes?\b",                    # also covers "senior notes" / "subordinated notes"
+    r"\bbonds?\b",
+    r"\bdebentures?\b",
+    r"\bsubordinated\b",
+    r"\betns?\b",
+    r"\bexchange[- ]traded notes?\b",
+    r"\bclosed[- ]end\b",
+    r"\bfund\b",
+    r"%",                             # coupon in the name, e.g. "5.25% Notes due 2027"
+]
+NAME_EXCLUSION_REGEX = "|".join(NAME_EXCLUSION_TERMS)
+
+# "Trust" catches closed-end funds and royalty trusts, but many legitimate REITs
+# also carry "Trust" in their name, so trust matches are exempted when the FMP
+# industry marks the row as a REIT. Tradeoff: a REIT-like trust misclassified by
+# FMP's industry field is dropped, and a fund trust tagged as a REIT slips through.
+TRUST_NAME_REGEX = r"\btrust\b"
+REIT_INDUSTRY_REGEX = r"\bREIT\b"
+
+# FMP symbol suffix conventions (observed in the stock-list payload):
+# preferred series "-P"/"-PA".."-PZ", warrants "-WT"/"-WTA"/"-WTB", units "-UN",
+# rights "-RI". Single-letter dash suffixes (BRK-B, BF-B, HEI-A) are real share
+# classes and must survive, so hyphens alone are NOT an exclusion signal.
+# NASDAQ additionally encodes the type in the 5th letter of unhyphenated
+# 5-letter symbols (W = warrant, R = right, U = unit), e.g. BSLKW / ASPCR / PACHU.
+SYMBOL_EXCLUSION_PATTERNS = [
+    r"-P[A-Z]?$",
+    r"-WT[A-Z]?$",
+    r"-UN$",
+    r"-RI$",
+    r"^[A-Z]{4}[WRU]$",
+]
+SYMBOL_EXCLUSION_REGEX = "|".join(SYMBOL_EXCLUSION_PATTERNS)
+
+# Diagnostic columns added by flag_profile_exclusions; a row is dropped from the
+# universe when any of them is True.
+EXCLUSION_FLAGS = [
+    "exclude_profile_error",
+    "exclude_bad_exchange",
+    "exclude_etf",
+    "exclude_adr",
+    "exclude_shell",
+    "exclude_bad_name",
+    "exclude_bad_symbol",
+]
